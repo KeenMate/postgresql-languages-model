@@ -28,7 +28,7 @@ create or replace function public.get_group_translations(_language_code text, _g
 as
 $$
 select jsonb_object_agg(data_object_code, value)
-from translation
+from public.translation
 where language_code = _language_code
 	and data_group = _group_code
 group by data_group
@@ -36,11 +36,11 @@ group by data_group
 $$;
 
 
-create or replace function create_translation(_created_by text, _user_id int, _language_code text, _data_group text,
+create or replace function public.create_translation(_created_by text, _user_id int, _language_code text, _data_group text,
 																							_data_object_code text default null, _data_object_id bigint default null,
 																							_value text default null,
 																							_tenant_id int default 1)
-	returns setof translation
+	returns setof public.translation
 	language plpgsql
 as
 $$
@@ -50,7 +50,7 @@ begin
 	perform
 		auth.has_permission(_user_id, 'translations.create_translation', _tenant_id);
 
-	insert into translation (created_by, tenant_id, language_code, data_group, data_object_code, data_object_id, value)
+	insert into public.translation (created_by, tenant_id, language_code, data_group, data_object_code, data_object_id, value)
 	values (_created_by, _tenant_id, _language_code, _data_group, _data_object_code, _data_object_id, _value)
 	returning translation_id
 		into __last_id;
@@ -71,7 +71,7 @@ $$;
 
 create or replace function update_translation(_modified_by text, _user_id int, _translation_id int,
 																							_value text, _tenant_id int default 1)
-	returns setof translation
+	returns setof public.translation
 	language plpgsql
 as
 $$
@@ -80,7 +80,7 @@ begin
 		auth.has_permission(_user_id, 'translations.update_translation', _tenant_id);
 
 	return query
-		update translation set
+		update public.translation set
 			modified = now(),
 			modified_by = _modified_by,
 			value = _value
@@ -99,7 +99,7 @@ $$;
 
 create or replace function delete_translation(_deleted_by text, _user_id int, _translation_id int,
 																							_tenant_id int default 1)
-	returns setof translation
+	returns setof public.translation
 	language plpgsql
 as
 $$
@@ -108,7 +108,7 @@ begin
 		auth.has_permission(_user_id, 'translations.delete_translation', _tenant_id);
 
 	return query
-		delete from translation
+		delete from public.translation
 			where translation_id = _translation_id and tenant_id = _tenant_id
 			returning *;
 
@@ -142,7 +142,7 @@ begin
 
 	return query
 		with updated_rows as materialized (
-			update translation
+			update public.translation
 				set modified = now(),
 					modified_by = _created_by
 				from (select data_group, data_object_code, data_object_id, value
@@ -157,7 +157,7 @@ begin
 				returning translation_id)
 			 , new_rows as materialized (
 			insert
-				into translation (created_by, modified_by, tenant_id, language_code, data_group, data_object_code,
+				into public.translation (created_by, modified_by, tenant_id, language_code, data_group, data_object_code,
 													data_object_id, value)
 					select _created_by
 							 , _created_by
@@ -167,8 +167,8 @@ begin
 							 , t.data_object_code
 							 , t.data_object_id
 							 , t.value
-					from translation t
-								 left join translation dt on t.language_code = dt.language_code and
+					from public.translation t
+								 left join public.translation dt on t.language_code = dt.language_code and
 																						 t.data_group = dt.data_group and
 																						 t.data_object_code = dt.data_object_code and
 																						 t.data_object_id = dt.data_object_id
