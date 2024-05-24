@@ -8,6 +8,60 @@ select *
 from start_version_update('1.4', 'Added missing function for getting translations from database',
                           _component := 'languages_translations');
 
+/***
+ *    ██╗      █████╗ ███╗   ██╗ ██████╗ ██╗   ██╗ █████╗  ██████╗ ███████╗███████╗
+ *    ██║     ██╔══██╗████╗  ██║██╔════╝ ██║   ██║██╔══██╗██╔════╝ ██╔════╝██╔════╝
+ *    ██║     ███████║██╔██╗ ██║██║  ███╗██║   ██║███████║██║  ███╗█████╗  ███████╗
+ *    ██║     ██╔══██║██║╚██╗██║██║   ██║██║   ██║██╔══██║██║   ██║██╔══╝  ╚════██║
+ *    ███████╗██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████╗███████║
+ *    ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚══════╝
+ *
+ */
+
+drop function const.get_language(_language_code text);
+create function const.get_language(
+	_display_language_code text
+, _language_code text)
+	returns table
+	        (
+		        __code                              text,
+		        __value                             text,
+		        __title                             text,
+		        __tenant_id                         integer,
+		        __is_frontend_language              boolean,
+		        __is_backend_language               boolean,
+		        __is_communication_language         boolean,
+		        __frontend_logical_order            integer,
+		        __backend_logical_order             integer,
+		        __communication_logical_order       integer,
+		        __is_default_frontend_language      boolean,
+		        __is_default_backend_language       boolean,
+		        __is_default_communication_language boolean,
+		        __custom_data                       jsonb
+	        )
+	language sql
+as
+$$
+select l.code
+		 , l.value
+		 , coalesce(t.value, l.value)
+		 , l.tenant_id
+		 , l.is_frontend_language
+		 , l.is_backend_language
+		 , l.is_communication_language
+		 , l.frontend_logical_order
+		 , l.backend_logical_order
+		 , l.communication_logical_order
+		 , l.is_default_frontend_language
+		 , l.is_default_backend_language
+		 , l.is_default_communication_language
+		 , l.custom_data
+from const.language l
+	left join public.translation t
+	          on t.language_code = _display_language_code and data_group = 'language' and data_object_code = l.code
+where l.code = _language_code;
+$$;
+
 create or replace function public.export_translations(_data_group text)
 	returns table
 	        (
@@ -25,6 +79,30 @@ select language_code
 from translation
 where data_group = _data_group
 group by language_code
+$$;
+
+drop function public.get_group_translations(
+	_language_code text
+, _group_code text);
+create or replace function public.get_group_translations(
+	_language_code text
+, _group_code text
+, _tenant_id int)
+	returns table
+	        (
+		        __translations jsonb
+	        )
+	stable
+	language sql
+as
+$$
+select jsonb_object_agg(data_object_code, value)
+from public.translation
+where tenant_id = _tenant_id
+	and language_code = _language_code
+	and data_group = _group_code
+group by data_group
+	;
 $$;
 
 select *
