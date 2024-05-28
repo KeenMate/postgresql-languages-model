@@ -18,6 +18,32 @@ from start_version_update('1.4', 'Added missing function for getting translation
  *
  */
 
+	/***
+ *    ████████╗ █████╗ ██████╗ ██╗     ███████╗███████╗
+ *    ╚══██╔══╝██╔══██╗██╔══██╗██║     ██╔════╝██╔════╝
+ *       ██║   ███████║██████╔╝██║     █████╗  ███████╗
+ *       ██║   ██╔══██║██╔══██╗██║     ██╔══╝  ╚════██║
+ *       ██║   ██║  ██║██████╔╝███████╗███████╗███████║
+ *       ╚═╝   ╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝╚══════╝
+ *
+ */
+
+-- recreated translation unique indexes to accommodate per-tenant translations
+drop index uq_translation_code;
+create unique index uq_translation_code on public.translation (tenant_id, language_code, data_group, data_object_code);
+drop index uq_translation_obj_id;
+create unique index uq_translation_obj_id on public.translation (tenant_id, language_code, data_group, data_object_id);
+
+ /***
+ *    ███████╗██╗   ██╗███╗   ██╗ ██████╗███████╗
+ *    ██╔════╝██║   ██║████╗  ██║██╔════╝██╔════╝
+ *    █████╗  ██║   ██║██╔██╗ ██║██║     ███████╗
+ *    ██╔══╝  ██║   ██║██║╚██╗██║██║     ╚════██║
+ *    ██║     ╚██████╔╝██║ ╚████║╚██████╗███████║
+ *    ╚═╝      ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚══════╝
+ *
+ */
+
 drop function const.get_language(_language_code text);
 create function const.get_language(
 	_display_language_code text
@@ -65,20 +91,22 @@ $$;
 create or replace function public.export_translations(_data_group text)
 	returns table
 	        (
+		        __tenant_id    int,
 		        __lang_code    text,
-		        __translations json,
+		        __translations jsonb,
 		        __count        bigint
 	        )
 	stable
 	language sql
 as
 $$
-select language_code
-		 , json_object_agg(data_object_code, value)
-		 , count(translation_id)
-from translation
-where data_group = _data_group
-group by language_code
+select t.tenant_id
+		 , t.language_code
+		 , jsonb_object_agg(t.data_object_code, t.value)
+		 , count(t.translation_id)
+from public.translation t
+where t.data_group = _data_group
+group by t.tenant_id, t.language_code
 $$;
 
 drop function public.get_group_translations(
